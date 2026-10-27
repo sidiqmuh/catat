@@ -759,7 +759,7 @@ function menuDebts(){const open=st.debts.filter(d=>debtLeft(d)>0),piu=open.filte
   <div class="card help"><p>Catat lewat kolom Catat cepat:</p><p><code>pinjamkan budi 100rb</code> · <code>pinjam ke sari 200rb</code></p><p><code>budi bayar 50rb</code> · <code>bayar utang sari 100rb</code></p><p><code>makan 90rb patungan budi, sari</code></p></div>`}
 function menuSettings(){return `<div class="card"><h3>Batas belanja bulanan</h3><p class="muted" style="margin:0 0 8px">Untuk menghitung "aman belanja hari ini".</p><form class="inl" id="limitForm"><input class="field num" id="limitIn" inputmode="numeric" placeholder="Rp3.000.000" value="${st.limit?st.limit.toLocaleString("id-ID"):""}" aria-label="Batas belanja bulanan"><button type="submit" class="btn">Simpan</button></form></div>
   <div class="card"><h3>Tema</h3><div class="seg" style="background:var(--surface)">${[["auto","Ikuti HP"],["light","Terang"],["dark","Gelap"]].map(([k,l])=>`<button type="button" data-th="${k}" aria-pressed="${theme===k}">${l}</button>`).join("")}</div></div>
-  <div class="card"><h3>Sambungan</h3><p class="muted" style="margin:0 0 8px">Terhubung ke Apps Script spreadsheet Anda.</p><button type="button" class="btn gh" id="reconn">Ganti sambungan</button></div>
+  <div class="card"><h3>Sambungan</h3><p class="muted" style="margin:0 0 8px">Terhubung ke Apps Script spreadsheet Anda.<br>Baca struk: ${sample?"<b style=\"color:var(--in)\">aktif</b>":"belum aktif (isi GEMINI_KEY di Properti skrip Apps Script)"}</p><button type="button" class="btn gh" id="reconn">Ganti sambungan</button></div>
   <div class="card help"><h3>Catat cepat</h3><p><code>kopi 18rb</code> · <code>bensin 20rb tunai</code> · <code>gaji 6jt bni</code> · <code>tarik tunai 500rb</code></p><p>Tempel notifikasi QRIS/bank juga bisa langsung.</p></div>
   <a class="muted" href="https://docs.google.com/spreadsheets/d/${SID}/edit" target="_blank" rel="noopener" style="text-align:center;color:var(--accent);font-weight:700">Buka spreadsheet</a>`}
 $("sheetIn").addEventListener("click",async e=>{if(st.sheetKind!=="menu")return;
@@ -785,26 +785,31 @@ $("sheetIn").addEventListener("submit",async e=>{if(st.sheetKind!=="menu")return
     const used=new Set(st.accs.map(a=>a.row));let row=2;while(used.has(row))row++;if(await patch(`Akun!A${row}:C${row}`,[[name,type,bal]],f)){toast("Akun "+name+" ditambahkan");await load(true)}}});
 
 /* receipt */
-$("cam").onclick=()=>{if(!sample){toast("Foto struk butuh izin memakai Claude.");return}$("file").click()};
+$("cam").onclick=()=>{if(!sample){toast("Baca struk belum aktif. Lihat ☰ → Atur.");return}$("file").click()};
 $("file").onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!sample)return;toast("Membaca struk…");
   try{const r=await sample.json(`Ini foto struk atau nota belanja di Indonesia. Balas HANYA satu objek JSON: {"total": total dibayar dalam rupiah tanpa titik (0 jika tidak terbaca), "toko": nama toko atau null, "tanggal": "dd/mm/yyyy" atau null, "kategori": salah satu dari ${JSON.stringify(st.out)} atau null, "bayar": "tunai"|"qris"|"debit"|"kredit"|"ewallet"|null, "ringkas": isi belanja utama maksimal 4 kata}`,{images:[f]});
     const total=Math.round(Number(r&&r.total)||0);if(!total){toast("Total di struk tidak terbaca. Coba foto lebih dekat.");return}
     const pay=String(r.bayar||"").toLowerCase(),acc=pay==="tunai"?firstOf("Dompet"):pay==="ewallet"?firstOf("E-Wallet"):pay?firstOf("Rekening"):null,d=parseDate(r.tanggal);
     openCatat({type:"Pengeluaran",amount:total,cat:st.out.includes(r.kategori)?r.kategori:null,acc,date:d&&Math.abs(d-today())<60*864e5&&d<=today()?d:today(),note:[r.toko,r.ringkas].filter(Boolean).join(" · ").slice(0,120),msg:"Dari struk. Cek lalu Simpan"})}
-  catch(err){const c=err&&err.code;toast(c==="not_granted"||c==="sampling_disabled"?"Foto struk butuh izin memakai Claude. Muat ulang lalu Izinkan.":"Struk tidak terbaca jelas. Coba foto ulang.")}};
+  catch(err){const c=err&&err.code;toast(c==="tool_error"?"Gagal membaca struk: "+(err.message||"").slice(0,80):"Struk tidak terbaca jelas. Coba foto ulang.")}};
 
 /* boot */
 renderAll();
 $("cam").hidden=true;
+async function shrink(file){try{const bmp=await createImageBitmap(file);const k=Math.min(1,1600/Math.max(bmp.width,bmp.height)),c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return c.toDataURL("image/jpeg",0.85).split(",")[1]}
+  catch(e){return await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=no;r.readAsDataURL(file)})}}
+function makeAI(cfg){return {json:async(prompt,opt)=>{const f=opt&&opt.images&&opt.images[0];const body={prompt};if(f){body.image=await shrink(f);body.mime="image/jpeg"}
+  const r=await api(cfg,"ai_json",body);if(!r||r.result==null)throw {code:"ai_failed"};return r.result}}}
+async function initAI(cfg){try{const r=await api(cfg,"ping",{});if(r&&r.ai){sample=makeAI(cfg);$("cam").hidden=false;$("file").accept="image/*"}else{sample=null;$("cam").hidden=true}}catch(e){}}
 function showSetup(msg){const c=getCfg()||{};$("sUrl").value=c.url||"";$("sPin").value=c.pin||"";$("sErr").hidden=!msg;$("sErr").textContent=msg||"";$("setup").hidden=false}
 $("setupForm").addEventListener("submit",async e=>{e.preventDefault();const url=$("sUrl").value.trim(),pin=$("sPin").value.trim(),err=$("sErr"),go=$("sGo");
   if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){err.hidden=false;err.textContent="URL harus diawali https://script.google.com/macros/s/…";return}
   if(!pin){err.hidden=false;err.textContent="Isi PIN-nya";return}
   go.setAttribute("aria-busy","true");go.textContent="Menyambungkan…";
-  try{await api({url,pin},"ping",{});ls.set(CFG_KEY,JSON.stringify({url,pin}));$("setup").hidden=true;mcp=makeBackend({url,pin});load(true)}
+  try{await api({url,pin},"ping",{});ls.set(CFG_KEY,JSON.stringify({url,pin}));$("setup").hidden=true;mcp=makeBackend({url,pin});load(true);initAI({url,pin})}
   catch(x){err.hidden=false;err.textContent=x.code==="pin_not_set"?"PIN di Apps Script masih GANTI-PIN-INI. Ganti PIN-nya, Simpan, lalu Kelola deployment → Versi baru → Terapkan.":x.code==="unauthorized"?"PIN tidak cocok. Pastikan sudah Kelola deployment → Versi baru setelah mengganti PIN.":errText(x,false)}
   finally{go.removeAttribute("aria-busy");go.textContent="Sambungkan"}});
-(()=>{const c=getCfg();if(!c||!c.url){setDot("err");$("tl").innerHTML="";showSetup();return}mcp=makeBackend(c);load(true)})();
+(()=>{const c=getCfg();if(!c||!c.url){setDot("err");$("tl").innerHTML="";showSetup();return}mcp=makeBackend(c);load(true);initAI(c)})();
 window.addEventListener("online",()=>{if(mcp&&!live)load(true)});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&mcp&&live&&!st.sheetKind)load(true)});
 })();
