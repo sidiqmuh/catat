@@ -474,12 +474,12 @@ function parseQuick(text){let s=" "+text.trim()+" ";const res={type:null,amount:
       else if(hits.length>=2){res.acc=hits[0].name;res.to=hits[1].name}
       else if(hits.length===1){if(from&&accType(hits[0].name)===from)res.acc=hits[0].name;else if(to&&accType(hits[0].name)===to)res.to=hits[0].name;else if(!res.acc)res.acc=hits[0].name;else res.to=hits[0].name}
       if(res.acc===res.to)res.to=null;let rest=s.replace(rx," ");hits.forEach(h=>{rest=rest.replace(reWord(h.word),"$1 ")});
-      rest=rest.replace(/\b(dari|ke|di|via|lewat|pakai|pake)\b/ig," ").replace(/\s+/g," ").replace(/^[\s,.]+|[\s,.]+$/g,"").trim();res.note=cap(rest);return res}}
+      rest=rest.replace(/\b(dari|ke|di|via|lewat|pakai|pake)\b/ig," ").replace(/\s+/g," ").replace(/^[\s,.]+|[\s,.]+$/g,"").trim();res.note=cap(rest);if(sameDay(res.date,today()))res.date=selDay();return res}}
   const hits=findAccounts(s);if(hits.length){res.acc=hits[0].name;s=s.replace(reWord(hits[0].word),"$1 ")}
   let note=s.replace(/\s+/g," ").replace(/^[\s+\-,.]+|[\s,.]+$/g,"").replace(/\s(ke|dari|pakai|pake|via|lewat)$/i,"").trim();
   let cat=guessCat(note,null);
   if(cat)res.type=st.inc.includes(cat)&&!st.out.includes(cat)?"Pemasukan":"Pengeluaran";else res.type=(INCOME_WORDS.test(note)||/^\s*\+/.test(text))?"Pemasukan":"Pengeluaran";
-  res.cat=cat;res.note=cap(note);if(!res.acc)res.acc=defaultAcc(res.type);return res}
+  res.cat=cat;res.note=cap(note);if(!res.acc)res.acc=defaultAcc(res.type);if(sameDay(res.date,today()))res.date=selDay();return res}
 function cleanName(s){s=" "+s+" ";findAccounts(s).forEach(h=>{s=s.replace(reWord(h.word),"$1 ")});
   return title(s.replace(/\b(pakai|pake|via|lewat|dari|ke|sama|ama|kepada|uang|utang|hutang|nya|aku|saya|tadi|kemarin)\b/gi," ").replace(/[^a-zA-Z' .-]/g," ").replace(/\s+/g," ").trim())}
 function openDebtsOf(name,kind){const n=name.toLowerCase();return st.debts.filter(d=>debtLeft(d)>0&&(!kind||d.kind===kind)&&(d.name.toLowerCase()===n||d.name.toLowerCase().startsWith(n)||n.startsWith(d.name.toLowerCase())))}
@@ -552,7 +552,7 @@ function quickPreview(){const v=q.value.trim();$("qGo").hidden=!v;const box=$("q
   const d=parseDebt(v),sp=!d&&parseSplit(v);if(d){box.innerHTML=`<span class="qp">${d.kind==="Piutang"?"Piutang":"Utang"}${d.act==="pay"?" · bayar":""}</span><span class="qp">${esc(d.name||"?")}</span>${d.amt?`<span class="qp num">${fmt(d.amt)}</span>`:""}`;return}
   if(sp){box.innerHTML=`<span class="qp">Patungan</span><span class="qp">${esc(sp.mode==="me"?(sp.names.join(", ")||"nama?"):"dibayarin "+sp.payer)}</span>`;return}
   const p=parseQuick(v);box.innerHTML=[`<span class="qp">${p.type==="Pengeluaran"?"Keluar":p.type==="Pemasukan"?"Masuk":"Pindah"}</span>`,p.amount?`<span class="qp num">${fmt(p.amount)}</span>`:`<span class="qp miss">jumlah?</span>`,
-    p.cat?`<span class="qp">${esc(p.cat)}</span>`:`<span class="qp miss">kategori?</span>`,p.type===XF?`<span class="qp">${esc(p.acc||"?")} → ${esc(p.to||"?")}</span>`:(p.acc?`<span class="qp">${esc(p.acc)}</span>`:"")].join("")}
+    p.cat?`<span class="qp">${esc(p.cat)}</span>`:`<span class="qp miss">kategori?</span>`,p.type===XF?`<span class="qp">${esc(p.acc||"?")} → ${esc(p.to||"?")}</span>`:(p.acc?`<span class="qp">${esc(p.acc)}</span>`:""),sameDay(p.date,today())?"":`<span class="qp">${HR[p.date.getDay()]} ${p.date.getDate()} ${BLN[p.date.getMonth()]}</span>`].join("")}
 q.addEventListener("input",quickPreview);
 q.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submitQuick()}});
 q.addEventListener("paste",e=>{const v=(e.clipboardData||window.clipboardData).getData("text");if(v&&looksNotif(v)){e.preventDefault();q.value="";quickPreview();handleNotif(v)}});
@@ -603,7 +603,7 @@ $("sheet").addEventListener("touchend",e=>{if(ty0!=null&&e.changedTouches[0].cli
 function catOrder(list){const cnt={};st.tx.forEach(t=>{cnt[t.cat]=(cnt[t.cat]||0)+1});return [...list].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0)||list.indexOf(a)-list.indexOf(b))}
 function applyPreset(n){n=(n||"").toLowerCase();const f=st.f;if(/tarik/.test(n)){f.acc=firstOf("Rekening")||f.acc;f.to=firstOf("Dompet")}else if(/setor/.test(n)){f.acc=firstOf("Dompet")||f.acc;f.to=firstOf("Rekening")}else if(/top ?up/.test(n)){f.acc=firstOf("Rekening")||f.acc;f.to=firstOf("E-Wallet")}if(f.to===f.acc)f.to=(st.accs.find(a=>a.name!==f.acc)||{}).name||null}
 function openCatat(o){o=o||{};const type=o.type||"Pengeluaran";
-  st.f={type,amount:o.amount||0,cat:o.cat||null,acc:o.acc&&accOf(o.acc)?o.acc:defaultAcc(type),to:o.to&&accOf(o.to)?o.to:null,date:o.date||today(),note:o.note||"",pick:null,all:false,split:false,names:"",msg:o.msg||""};
+  st.f={type,amount:o.amount||0,cat:o.cat||null,acc:o.acc&&accOf(o.acc)?o.acc:defaultAcc(type),to:o.to&&accOf(o.to)?o.to:null,date:o.date||selDay(),note:o.note||"",pick:null,all:false,split:false,names:"",msg:o.msg||""};
   if(type===XF&&!st.f.cat){st.f.cat=st.xfer.find(x=>/tarik/i.test(x))||st.xfer[0];applyPreset(st.f.cat)}
   openSheet("catat",`<div id="cBody" style="display:flex;flex-direction:column;gap:14px"></div>`);renderCatat()}
 function renderCatat(){const f=st.f,T=f.type,xf=T===XF,b=balances();if(!$("cBody"))return;
@@ -665,7 +665,9 @@ $("openCatat").onclick=()=>openCatat({});
 /* ---------- edit an entry ---------- */
 function openEdit(row){const x=st.tx.find(t=>t.row===row);if(!x)return;if(x.row>=1e9){toast("Muat ulang dulu untuk mengubah catatan ini.");return}st.editRow=row;st.confirm=null;
   const cats=x.type==="Pemasukan"?st.inc:x.type==="Pengeluaran"?st.out:x.type===XF?st.xfer:[];
-  openSheet("edit",`<div class="card"><div class="muted">${HARI[x.date.getDay()]}, ${x.date.getDate()} ${BULAN[x.date.getMonth()]} · ${esc(x.type)}</div>
+  const t0=today(),isT=sameDay(x.date,t0),isY=sameDay(x.date,addDays(t0,-1));
+  openSheet("edit",`<div class="card"><div class="muted">${esc(x.type)} · ${HARI[x.date.getDay()]}, ${x.date.getDate()} ${BULAN[x.date.getMonth()]} ${x.date.getFullYear()}</div>
+    <div class="picker" style="justify-content:flex-start;margin-top:8px"><button type="button" class="pk" data-edate="0" aria-pressed="${isT}" style="${isT?"":"background:var(--surface)"}">Hari ini</button><button type="button" class="pk" data-edate="1" aria-pressed="${isY}" style="${isY?"":"background:var(--surface)"}">Kemarin</button><label class="pk" aria-pressed="${!isT&&!isY}" style="${!isT&&!isY?"":"background:var(--surface)"}"><input type="date" id="eDate" value="${toISO(x.date)}" max="${toISO(t0)}" aria-label="Ubah tanggal"></label></div>
     <input class="field" id="eNote" value="${esc(x.note)}" placeholder="Keterangan" maxlength="120" aria-label="Keterangan" style="margin-top:8px"${x.type===UP?" disabled":""}>
     <div class="inl" style="margin-top:8px"><input class="field num" id="eAmt" inputmode="numeric" value="${x.amt.toLocaleString("id-ID")}" aria-label="Jumlah"><button type="button" class="btn" id="eSave">Simpan</button></div></div>
     ${cats.length?`<div class="card"><h3>Kategori</h3><div class="cats">${catOrder(cats).map(c=>{const [ic,col]=look(c,x.type);return `<button type="button" class="cat" data-ecat="${esc(c)}" aria-pressed="${c===x.cat}" style="color:${col}"><span class="b" style="background:color-mix(in srgb,${col} var(--mixbg),var(--surface))">${ico(ic,22)}</span><span style="color:var(--ink-2)">${esc(c)}</span></button>`}).join("")}</div></div>`:""}
@@ -674,6 +676,7 @@ function openEdit(row){const x=st.tx.find(t=>t.row===row);if(!x)return;if(x.row>
 async function patch(range,values,btn){btn&&btn.setAttribute("aria-busy","true");try{await call("update_values",{range,values});return true}catch(err){toast(errText(err,true));return false}finally{btn&&btn.removeAttribute("aria-busy")}}
 $("sheetIn").addEventListener("click",async e=>{if(st.sheetKind!=="edit")return;const x=st.tx.find(t=>t.row===st.editRow);if(!x)return;
   const c=e.target.closest("[data-ecat]"),a=e.target.closest("[data-eacc]");
+  const ed=e.target.closest("[data-edate]");if(ed){await moveDate(x,addDays(today(),-+ed.dataset.edate),ed);return}
   if(c){if(await patch(`Transaksi!C${x.row}`,[[c.dataset.ecat]],c)){x.cat=c.dataset.ecat;renderAll();openEdit(x.row);toast("Kategori diubah")}return}
   if(a){if(await patch(`Transaksi!F${x.row}`,[[a.dataset.eacc]],a)){x.acc=a.dataset.eacc;renderAll();openEdit(x.row);toast("Akun diubah")}return}
   if(e.target.closest("#eSave")){const n=digits($("eAmt").value),note=$("eNote").value.trim();if(!n){$("eAmt").focus();return}
@@ -681,6 +684,10 @@ $("sheetIn").addEventListener("click",async e=>{if(st.sheetKind!=="edit")return;
   if(e.target.closest("#eDel")){const b=e.target.closest("#eDel");if(st.confirm!=="del"){st.confirm="del";b.textContent="Ketuk lagi untuk menghapus";return}
     b.setAttribute("aria-busy","true");try{await call("batch_clear_values",{ranges:[`Transaksi!A${x.row}:G${x.row}`]});st.tx=st.tx.filter(t=>t.row!==x.row);closeSheet();renderAll();toast("Catatan dihapus")}catch(err){b.removeAttribute("aria-busy");toast(errText(err,true))}}});
 
+async function moveDate(x,d,el){if(!d||isNaN(d)||sameDay(d,x.date))return;
+  if(await patch(`Transaksi!A${x.row}`,[[toSheetDate(d)]],el)){x.date=d;renderAll();openEdit(x.row);toast(`Dipindah ke ${HARI[d.getDay()]}, ${d.getDate()} ${BLN[d.getMonth()]}`)}}
+$("sheetIn").addEventListener("change",e=>{if(st.sheetKind!=="edit"||e.target.id!=="eDate"||!e.target.value)return;const x=st.tx.find(t=>t.row===st.editRow);if(x)moveDate(x,fromISO(e.target.value),e.target)});
+const selDay=()=>st.sel<=today()?st.sel:today();
 /* ---------- render: Harian ---------- */
 function limitInfo(){if(st.limit>0)return {v:st.limit};const b=Object.entries(st.budget).filter(([k])=>!isSaving(k)).reduce((a,[,v])=>a+v,0);return b>0?{v:b}:null}
 function allowance(){const t=today(),L=limitInfo();if(!L)return null;const dim=daysIn(t.getFullYear(),t.getMonth());
@@ -694,6 +701,7 @@ function renderHarian(){const t=today(),wk=st.wk,isThis=sameDay(wk,monday(t));
   $("week").innerHTML=days.map((d,i)=>`<button type="button" class="day${sameDay(d,t)?" today":""}${d>t?" future":""}" data-day="${d.getTime()}" aria-pressed="${sameDay(d,st.sel)}" aria-label="${HARI[d.getDay()]} ${d.getDate()}: keluar ${fmt(vals[i])}"><span>${HR[d.getDay()]}</span><b>${d.getDate()}</b><i style="height:${vals[i]?Math.max(6,Math.round(vals[i]/max*28)):5}px"></i></button>`).join("");
   const s=st.sel,isT=sameDay(s,t),isY=sameDay(s,addDays(t,-1)),out=dayOut(s);
   $("hSub").textContent=`${BULAN[s.getMonth()]} ${s.getFullYear()}`;$("hTitle").textContent=isT?"Hari ini":isY?"Kemarin":`${HARI[s.getDay()]}, ${s.getDate()} ${BLN[s.getMonth()]}`;
+  $("q").placeholder=isT||s>t?"Catat cepat… kopi 18rb":`Catat untuk ${HR[s.getDay()]} ${s.getDate()} ${BLN[s.getMonth()]}…`;
   $("dLbl").textContent=isT?"Keluar hari ini":"Keluar "+(isY?"kemarin":"hari itu");$("dTot").textContent=live?fmt(out):"Rp—";
   const past=[...Array(30)].map((_,i)=>dayOut(addDays(s,-(i+1)))),avg=past.reduce((a,b)=>a+b,0)/30,bd=$("dBadge");
   if(live&&avg>0&&s<=t){bd.hidden=false;const r=out/avg;bd.className="badge "+(r>1.2?"up":r<0.8?"down":"n");bd.textContent=r>1.2?"▲ di atas biasanya":r<0.8?"▼ lebih hemat dari biasanya":"seperti biasanya"}else bd.hidden=true;
