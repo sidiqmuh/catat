@@ -378,7 +378,7 @@ function getCfg(){try{return JSON.parse(ls.get(CFG_KEY)||"null")}catch(e){return
 async function api(cfg,tool,input){if(!navigator.onLine)throw {code:"offline"};let r;
   try{r=await fetch(cfg.url,{method:"POST",body:JSON.stringify({pin:cfg.pin,tool,...input}),redirect:"follow"})}catch(e){throw {code:"server_unavailable",retryable:true}}
   let j;try{j=await r.json()}catch(e){throw {code:"server_unavailable",message:"Balasan Apps Script tidak terbaca. Pastikan akses web app: Siapa saja."}}
-  if(j&&j.error)throw {code:j.error==="unauthorized"?"unauthorized":"tool_error",message:j.message||j.error};return j}
+  if(j&&j.error)throw {code:j.error==="unauthorized"||j.error==="pin_not_set"?j.error:"tool_error",message:j.message||j.error};return j}
 function makeBackend(cfg){return {callTool:async(srv,tool,input)=>{const {spreadsheetId,...rest}=input||{};return {payload:await api(cfg,tool,rest)}}}}
 const st={tx:[],out:[],inc:[],xfer:[],budget:{},accs:[],limit:0,debts:[],debtNext:2,view:"harian",sel:today(),wk:monday(today()),month:new Date(today().getFullYear(),today().getMonth(),1),
   f:null,menuTab:"akun",confirm:null,editRow:null,lastUndo:null};
@@ -794,7 +794,7 @@ $("setupForm").addEventListener("submit",async e=>{e.preventDefault();const url=
   if(!pin){err.hidden=false;err.textContent="Isi PIN-nya";return}
   go.setAttribute("aria-busy","true");go.textContent="Menyambungkan…";
   try{await api({url,pin},"ping",{});ls.set(CFG_KEY,JSON.stringify({url,pin}));$("setup").hidden=true;mcp=makeBackend({url,pin});load(true)}
-  catch(x){err.hidden=false;err.textContent=x.code==="unauthorized"?"PIN tidak cocok dengan yang ada di Apps Script.":errText(x,false)}
+  catch(x){err.hidden=false;err.textContent=x.code==="pin_not_set"?"PIN di Apps Script masih GANTI-PIN-INI. Ganti PIN-nya, Simpan, lalu Kelola deployment → Versi baru → Terapkan.":x.code==="unauthorized"?"PIN tidak cocok. Pastikan sudah Kelola deployment → Versi baru setelah mengganti PIN.":errText(x,false)}
   finally{go.removeAttribute("aria-busy");go.textContent="Sambungkan"}});
 (()=>{const c=getCfg();if(!c||!c.url){setDot("err");$("tl").innerHTML="";showSetup();return}mcp=makeBackend(c);load(true)})();
 window.addEventListener("online",()=>{if(mcp&&!live)load(true)});
